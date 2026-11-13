@@ -1,0 +1,13 @@
+﻿node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+dist/
+build/
+*.zip
+
+backend/gen-ai-f7848-firebase-adminsdk-fbsvc-f734bc9909.json
