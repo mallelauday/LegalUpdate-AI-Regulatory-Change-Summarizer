@@ -4,7 +4,6 @@ import datetime
 import jwt
 from functools import wraps
 from flask import request, jsonify
-from bson import ObjectId
 from config import Config
 
 def get_utc_now():
@@ -48,30 +47,39 @@ def compute_text_diff(old_text: str, new_text: str):
         "diff_lines": diff[:200]  # Cap for responsive UI
     }
 
-def serialize_mongo(obj):
-    """Recursively convert MongoDB ObjectId and datetime objects to JSON-serializable types."""
+def serialize_firestore(obj):
+    """
+    Recursively serialize Firestore document data, datetime objects,
+    and nested data structures into JSON-compliant primitives.
+    """
     if isinstance(obj, list):
-        return [serialize_mongo(item) for item in obj]
+        return [serialize_firestore(item) for item in obj]
     elif isinstance(obj, dict):
         new_dict = {}
         for k, v in obj.items():
-            if k == "_id":
+            if k == "_id" and "id" not in obj:
                 new_dict["id"] = str(v)
             else:
-                new_dict[k] = serialize_mongo(v)
+                new_dict[k] = serialize_firestore(v)
         return new_dict
-    elif isinstance(obj, ObjectId):
-        return str(obj)
     elif isinstance(obj, (datetime.datetime, datetime.date)):
         return obj.isoformat()
+    elif hasattr(obj, "isoformat") and callable(obj.isoformat):
+        # Handles Google Cloud Timestamp / DatetimeWithNanoseconds
+        return obj.isoformat()
+    elif hasattr(obj, "__str__") and type(obj).__name__ in ("ObjectId", "DocumentReference", "UUID"):
+        return str(obj)
     return obj
+
+# Backward-compatibility alias
+serialize_mongo = serialize_firestore
 
 def api_response(data=None, message="Success", status_code=200, error=None, meta=None):
     """Standardized JSON response payload."""
     payload = {
         "success": error is None and status_code < 400,
         "message": message,
-        "data": serialize_mongo(data),
+        "data": serialize_firestore(data),
         "error": error
     }
     if meta is not None:

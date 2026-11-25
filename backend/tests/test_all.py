@@ -243,9 +243,11 @@ class LegalUpdateAITestSuite(unittest.TestCase):
 
     # 13. Firecrawl Webhooks with HMAC Signature & Idempotency
     def test_13_firecrawl_webhook_and_queue(self):
+        import uuid
+        test_event_id = f"wh-test-event-{uuid.uuid4().hex[:8]}"
         secret = Config.FIRECRAWL_WEBHOOK_SECRET
         payload = {
-            "id": "wh-test-event-999",
+            "id": test_event_id,
             "url": "https://www.rbi.org.in/scripts/BS_CircularIndexDisplay.aspx?Id=99999",
             "source_code": "RBI",
             "data": {
