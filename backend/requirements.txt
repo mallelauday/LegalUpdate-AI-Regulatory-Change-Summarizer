@@ -7,3 +7,4 @@ beautifulsoup4==4.15.0
 python-dotenv==1.2.4
 pyjwt==2.15.1
 pydantic==2.14.3
+gunicorn==23.0.0

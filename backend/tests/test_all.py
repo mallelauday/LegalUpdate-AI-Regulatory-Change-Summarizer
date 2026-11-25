@@ -2,6 +2,8 @@ import unittest
 import json
 import os
 import sys
+import hmac
+import hashlib
 from pathlib import Path
 
 # Add backend directory to sys.path
@@ -9,12 +11,15 @@ backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from app import app
+from config import Config
 from database.firebase_db import FirestoreManager
 from services.change_detection import ChangeDetectionService
 from services.groq_service import GroqSummarizerService
 from services.firecrawl_service import FirecrawlService
+from services.firecrawl_monitor_service import FirecrawlMonitorService
 from services.memento_service import MementoMemoryService
 from services.regulatory_service import RegulatoryService
+from worker import BackgroundIngestionWorker
 
 class LegalUpdateAITestSuite(unittest.TestCase):
     def setUp(self):
@@ -31,7 +36,7 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         self.assertEqual(data['data']['python_version'], '3.14.2')
         self.assertIn('integrations', data['data'])
 
-    # 2. Authentication & Role Permissions
+    # 2. Authentication & 4-Tier Role Permissions
     def test_02_auth_and_roles(self):
         # Admin login
         res_admin = self.client.post('/api/auth/login', json={
@@ -43,15 +48,24 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         self.assertEqual(admin_data['user']['role'], 'admin')
         admin_token = admin_data['token']
 
-        # Reviewer login
+        # Senior Reviewer login
         res_rev = self.client.post('/api/auth/login', json={
             'email': 'senior.counsel@legalupdate.ai',
             'password': 'review123'
         })
         self.assertEqual(res_rev.status_code, 200)
         rev_data = res_rev.get_json()['data']
-        self.assertEqual(rev_data['user']['role'], 'reviewer')
+        self.assertIn(rev_data['user']['role'], ['reviewer', 'senior_reviewer'])
         rev_token = rev_data['token']
+
+        # Compliance Reviewer login
+        res_comp = self.client.post('/api/auth/login', json={
+            'email': 'compliance.officer@legalupdate.ai',
+            'password': 'review123'
+        })
+        self.assertEqual(res_comp.status_code, 200)
+        comp_data = res_comp.get_json()['data']
+        self.assertIn(comp_data['user']['role'], ['reviewer', 'compliance_reviewer'])
 
         # Viewer login
         res_view = self.client.post('/api/auth/login', json={
@@ -68,18 +82,19 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         res_users_viewer = self.client.get('/api/auth/users', headers={'Authorization': f'Bearer {view_token}'})
         self.assertEqual(res_users_viewer.status_code, 403)
 
-    # 3. Firebase Connectivity & Seeding
+    # 3. Firebase Connectivity & 12 Collections
     def test_03_firebase_connectivity(self):
         self.assertIsNotNone(self.db)
         sources = list(self.db.collection('regulatory_sources').stream())
         self.assertGreaterEqual(len(sources), 4)
         updates = list(self.db.collection('regulatory_updates').stream())
         self.assertGreaterEqual(len(updates), 3)
+        monitors = list(self.db.collection('monitor_configs').stream())
+        self.assertGreaterEqual(len(monitors), 4)
 
     # 4. Change Detection & Duplicate Prevention
     def test_04_change_detection(self):
         content_v1 = "Clause 1: Banks shall retain records for 5 years."
-        content_v2 = "Clause 1: Banks shall retain records for 8 years due to enhanced compliance."
 
         eval_new = ChangeDetectionService.evaluate_scraped_document(
             source_id="src-rbi",
@@ -92,7 +107,6 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         )
         self.assertEqual(eval_new['status'], 'NEW')
 
-        # Evaluate identical content -> UNCHANGED
         eval_unchanged = ChangeDetectionService.evaluate_scraped_document(
             source_id="src-rbi",
             source_code="RBI",
@@ -101,10 +115,9 @@ class LegalUpdateAITestSuite(unittest.TestCase):
             content=content_v1,
             document_id="RBI/2026-27/104"
         )
-        # It exists in seeded updates and has different content, so should detect MODIFIED
         self.assertIn(eval_unchanged['status'], ['MODIFIED', 'UNCHANGED'])
 
-    # 5. Groq Summary Generation & Guardrails
+    # 5. Groq Summary Generation & Strict Guardrails
     def test_05_groq_summary_generation(self):
         summary = GroqSummarizerService.generate_summary(
             title="SEBI Master Circular on Custodians",
@@ -130,7 +143,6 @@ class LegalUpdateAITestSuite(unittest.TestCase):
 
     # 6. Memento Historical Memory Recall & Ingestion
     def test_06_memento_memory_integration(self):
-        # Recall
         context = MementoMemoryService.recall_context_for_update(
             regulator="RBI",
             title="Information Technology Cloud Directions",
@@ -139,7 +151,6 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         self.assertTrue(context["has_precedent"])
         self.assertIn("precedent_ref", context)
 
-        # Ingestion of approved interpretation
         ingest_res = MementoMemoryService.ingest_approved_interpretation(
             update_id="test-upd-01",
             document_id="RBI/TEST/999",
@@ -166,7 +177,6 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         })
         token = login_res.get_json()['data']['token']
 
-        # Review an existing update
         review_res = self.client.post('/api/reviews/upd-rbi-2026-104',
             headers={'Authorization': f'Bearer {token}'},
             json={
@@ -178,7 +188,6 @@ class LegalUpdateAITestSuite(unittest.TestCase):
         self.assertEqual(review_res.status_code, 200)
         self.assertTrue(review_res.get_json()['success'])
 
-        # Verify audit history endpoint
         audit_res = self.client.get('/api/reviews/upd-rbi-2026-104/history',
             headers={'Authorization': f'Bearer {token}'}
         )
@@ -215,14 +224,95 @@ class LegalUpdateAITestSuite(unittest.TestCase):
 
     # 11. Error Handling & Edge Cases
     def test_11_error_handling(self):
-        # 404 Route
         res_404 = self.client.get('/api/non-existent-route')
         self.assertEqual(res_404.status_code, 404)
 
-        # 401 Unauthorized
         res_unauth = self.client.get('/api/updates')
         self.assertEqual(res_unauth.status_code, 401)
 
+    # 12. 15-Minute Regulatory Source Monitors
+    def test_12_firecrawl_monitors(self):
+        monitors = FirecrawlMonitorService.get_monitors()
+        self.assertGreaterEqual(len(monitors), 4)
+        codes = [m.get("source_code") for m in monitors]
+        for expected in ["RBI", "SEBI", "MCA", "IRDAI"]:
+            self.assertIn(expected, codes)
+        for m in monitors:
+            self.assertEqual(m.get("schedule"), "every 15 minutes")
+            self.assertEqual(m.get("timezone"), "Asia/Kolkata")
+
+    # 13. Firecrawl Webhooks with HMAC Signature & Idempotency
+    def test_13_firecrawl_webhook_and_queue(self):
+        secret = Config.FIRECRAWL_WEBHOOK_SECRET
+        payload = {
+            "id": "wh-test-event-999",
+            "url": "https://www.rbi.org.in/scripts/BS_CircularIndexDisplay.aspx?Id=99999",
+            "source_code": "RBI",
+            "data": {
+                "title": "RBI Automated Webhook Circular on Cloud Controls",
+                "markdown": "Mandatory directive on cloud storage encryption and disaster recovery protocols for commercial banks."
+            }
+        }
+        body_bytes = json.dumps(payload).encode("utf-8")
+        sig = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
+
+        # Post webhook
+        res = self.client.post(
+            '/api/webhooks/firecrawl',
+            data=body_bytes,
+            headers={
+                'Content-Type': 'application/json',
+                'x-firecrawl-signature': f"sha256={sig}"
+            }
+        )
+        self.assertEqual(res.status_code, 200)
+        res_data = res.get_json()['data']
+        self.assertIn("job_id", res_data)
+
+        # Re-posting same event returns duplicate status (idempotency)
+        res_dup = self.client.post(
+            '/api/webhooks/firecrawl',
+            data=body_bytes,
+            headers={
+                'Content-Type': 'application/json',
+                'x-firecrawl-signature': f"sha256={sig}"
+            }
+        )
+        self.assertEqual(res_dup.status_code, 200)
+        self.assertEqual(res_dup.get_json()['data']['status'], 'duplicate')
+
+    # 14. Render Background Worker Queue Processing
+    def test_14_background_worker_execution(self):
+        worker = BackgroundIngestionWorker(poll_interval=1)
+        count = worker.process_pending_jobs()
+        self.assertIsInstance(count, int)
+
+    # 15. Route Aliases & Root Health Check
+    def test_15_api_aliases_and_root_health(self):
+        # Top-level /health
+        res_root = self.client.get('/health')
+        self.assertEqual(res_root.status_code, 200)
+        self.assertEqual(res_root.get_json()['data']['status'], 'operational')
+
+        # Login to get token
+        login_res = self.client.post('/api/auth/login', json={
+            'email': 'admin@legalupdate.ai',
+            'password': 'admin123'
+        })
+        token = login_res.get_json()['data']['token']
+        headers = {'Authorization': f'Bearer {token}'}
+
+        # /api/regulatory-updates alias
+        res_alias_upd = self.client.get('/api/regulatory-updates', headers=headers)
+        self.assertEqual(res_alias_upd.status_code, 200)
+
+        # /api/ai-summaries alias
+        res_alias_sum = self.client.get('/api/ai-summaries', headers=headers)
+        self.assertEqual(res_alias_sum.status_code, 200)
+
+        # /api/historical-context alias
+        res_alias_hist = self.client.get('/api/historical-context', headers=headers)
+        self.assertEqual(res_alias_hist.status_code, 200)
+
 if __name__ == '__main__':
     unittest.main()
-

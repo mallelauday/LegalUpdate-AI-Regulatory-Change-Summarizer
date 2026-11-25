@@ -15,8 +15,8 @@ export default function LoginPage() {
 
   const demoAccounts = [
     { label: 'Admin (Sarah Jenkins)', email: 'admin@legalupdate.ai', pw: 'admin123', role: 'admin' },
-    { label: 'Senior Counsel (Vikram Mehta)', email: 'senior.counsel@legalupdate.ai', pw: 'review123', role: 'reviewer' },
-    { label: 'Compliance Officer (Ananya Sharma)', email: 'compliance.officer@legalupdate.ai', pw: 'review123', role: 'reviewer' },
+    { label: 'Senior Reviewer (Vikram Mehta)', email: 'senior.counsel@legalupdate.ai', pw: 'review123', role: 'senior_reviewer' },
+    { label: 'Compliance Reviewer (Ananya Sharma)', email: 'compliance.officer@legalupdate.ai', pw: 'review123', role: 'compliance_reviewer' },
     { label: 'Analyst (Rohan Gupta)', email: 'analyst@legalupdate.ai', pw: 'viewer123', role: 'viewer' },
   ];
 

@@ -1,365 +1,208 @@
-# LegalUpdate AI: Regulatory Change Summarizer
+# LegalUpdate AI — Regulatory Change Summarizer & Monitoring Suite
 
-An enterprise Generative AI regulatory monitoring and summarization platform engineered for legal, compliance, and risk teams across banking, capital markets, insurance, and corporate sectors.
+[![Python 3.14.2](https://img.shields.io/badge/Python-3.14.2-blue.svg)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Backend-Flask-green.svg)](https://flask.palletsprojects.com/)
+[![React 19](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Vite-61dafb.svg)](https://react.dev/)
+[![Groq LLM](https://img.shields.io/badge/AI%20Model-Groq%20Llama--3-orange.svg)](https://groq.com/)
+[![Firecrawl](https://img.shields.io/badge/Scraping-Firecrawl%20v1-red.svg)](https://firecrawl.dev/)
+[![Memento MCP](https://img.shields.io/badge/Memory-Hosted%20Memento%20MCP-purple.svg)](https://mementoagi.com/)
+[![Firebase Firestore](https://img.shields.io/badge/Database-Firebase%20Firestore-yellow.svg)](https://firebase.google.com/)
+[![Tests](https://img.shields.io/badge/Tests-15%20Passed%20(100%25)-success.svg)](./TESTING.md)
 
----
-
-## 1. Project Overview & Executive Summary
-
-Modern compliance and corporate counsel teams are inundated by hundreds of notifications, circulars, Master Directions, and gazette amendments issued annually by regulators such as the **Reserve Bank of India (RBI)**, **Securities and Exchange Board of India (SEBI)**, **Ministry of Corporate Affairs (MCA)**, and **Insurance Regulatory and Development Authority of India (IRDAI)**. 
-
-Manual website monitoring is error-prone, slow, and exposes organizations to severe non-compliance penalties, regulatory inquiries, and reputational risk.
-
-**LegalUpdate AI** automates this entire lifecycle:
-1. **Automated Source Crawling:** Uses **Firecrawl API** to extract structured markdown and metadata directly from official regulatory portals.
-2. **Cryptographic Change Detection:** Computes SHA-256 hashes of normalized legal text to detect new publications, identify mid-cycle amendments, generate unified line-by-line diffs, and prevent duplication.
-3. **High-Fidelity AI Summarization:** Employs **Groq API** with the **Llama-3.3-70B-Versatile** model to produce 10-point structured compliance briefings adhering to strict zero-hallucination guardrails.
-4. **Bitemporal Historical Memory:** Integrates **Memento** memory tracking (`valid_time` vs. `transaction_time`) to contextualize new circulars against historical precedents, prior amendments, and past approved interpretations.
-5. **Human-in-the-Loop Review System:** Enforces ethical legal AI boundaries with a four-stage review pipeline (*Pending Review*, *Approved*, *Rejected*, *Needs Modification*), custom editorial refinement, and immutable audit logs.
-6. **Enterprise Storage & Identity:** Uses **Firebase Firestore** as the primary persistent document database and **Firebase Authentication** for role-based authorization (*Admin*, *Reviewer*, *Viewer*).
+**LegalUpdate AI** is an enterprise-grade Generative AI regulatory intelligence and compliance monitoring platform. It continuously tracks official regulatory circulars from **RBI**, **SEBI**, **MCA**, and **IRDAI** on an automated **15-minute schedule**, detects modifications via normalized SHA-256 hashing, retrieves precedent context from **hosted Memento AGI MCP**, synthesizes 10-point structured legal summaries using **Groq LLM (Llama-3 70B)**, and supports human legal counsel review workflows.
 
 ---
 
-## 2. Technology Stack
+## 1. System Architecture & Workflow
+
+```
+                                      ┌───────────────────────────────┐
+                                      │   Firecrawl Scheduled Crawl   │
+                                      │  (15-min interval Asia/Cal)   │
+                                      └──────────────┬────────────────┘
+                                                     │ Webhook POST
+                                                     ▼
+┌─────────────────────────┐             ┌───────────────────────────────┐
+│     Vercel Frontend     │             │       Render Web Service      │
+│  React 19 + Vite (SPA)  │─── REST ───▶│    Flask API + CORS           │
+│  Auto-polling Dashboard │             │    /api/webhooks/firecrawl    │
+└─────────────────────────┘             └──────────────┬────────────────┘
+                                                       │ Enqueues job
+                                                       ▼
+                                        ┌───────────────────────────────┐
+                                        │   Firestore Ingestion Queue   │
+                                        │     ('ingestion_jobs')        │
+                                        └──────────────┬────────────────┘
+                                                       │ Claims job
+                                                       ▼
+                                        ┌───────────────────────────────┐
+                                        │    Render Background Worker   │
+                                        │          (worker.py)          │
+                                        ├───────────────────────────────┤
+                                        │ 1. Firecrawl Scraper          │
+                                        │ 2. Change Detection (SHA-256) │
+                                        │ 3. Hosted Memento AGI MCP     │
+                                        │ 4. Groq LLM (Llama-3 70B)     │
+                                        │ 5. Firestore Persistence      │
+                                        └───────────────────────────────┘
+```
+
+---
+
+## 2. Core Features & Capabilities
+
+1. **Automated 15-Minute Monitoring & Firecrawl Webhooks:**
+   - 4 official Indian authorities monitored on a 15-minute cadence (`Asia/Kolkata`):
+     - **Reserve Bank of India (RBI):** Master Directions, prudential norms, digital lending guidelines.
+     - **Securities and Exchange Board of India (SEBI):** LODR circulars, mutual fund guidelines, disclosure mandates.
+     - **Ministry of Corporate Affairs (MCA):** Companies Act statutory rules, CSR amendments, significant beneficial ownership.
+     - **Insurance Regulatory & Development Authority (IRDAI):** Solvency margins, policyholder protection guidelines.
+   - Secure webhook receiver (`POST /api/webhooks/firecrawl`) with HMAC-SHA256 signature verification and idempotency protection.
+
+2. **Decoupled Background Processing (Render Background Worker):**
+   - Webhooks enqueue jobs into `ingestion_jobs` collection.
+   - Dedicated daemon (`worker.py`) claims jobs atomically, diffs content, queries Memento, runs Groq summarization, and updates Firestore without blocking web API response times.
+
+3. **Zero-Hallucination Groq LLM Summarization:**
+   - Powered by `llama-3.3-70b-versatile` with automatic fallback to high-capacity Groq completion models.
+   - Structured 10-point JSON output: short summary, detailed legal background, key changes, mandatory obligations, affected organizations, compliance implications, effective date (or explicit disclosure of missing data), and recommended counsel actions.
+   - Prominent non-authoritative AI disclaimer on every output.
+
+4. **Hosted Memento AGI MCP Precedent Memory:**
+   - Direct integration with hosted Memento MCP JSON-RPC service (`https://api.mementoagi.com/mcp`).
+   - `full-search` queries historical precedents to contextualize regulatory continuity.
+   - `write-node` persists approved legal interpretations to knowledge graph nodes for future recall.
+
+5. **12 Production Firestore Collections:**
+   - `users`, `regulatory_sources`, `monitor_configs`, `ingestion_jobs`, `webhook_events`, `regulatory_updates`, `document_versions`, `ai_summaries`, `historical_context`, `review_history`, `notifications`, `system_logs`.
+   - Dual-mode `FirestoreManager`: Live Google Cloud Firestore with zero-config Local Firestore fallback.
+
+6. **4-Tier Role-Based Access Control (RBAC):**
+   - `admin`: Complete source, monitor, and user management.
+   - `senior_reviewer`: Full review queue approval, edits, and monitor management.
+   - `compliance_reviewer`: Review queue verification and comments.
+   - `viewer`: Read-only intelligence exploration and export.
+
+7. **Production Executive React Dashboard:**
+   - React 19 + Vite with 10 responsive pages styled in executive Navy/Slate.
+   - 20-second automated polling for real-time live ingestion updates.
+   - Side-by-side unified diff viewer, AI summary inspector, and review modal.
+
+---
+
+## 3. Technology Stack
 
 | Component | Technology | Version / Provider | Purpose |
 |---|---|---|---|
-| **Language Runtime** | Python | `3.14.2` | Core backend runtime and computational logic |
+| **Programming Language** | Python | `3.14.2` | Core backend runtime and computational logic |
 | **Backend Framework** | Flask & Flask-CORS | `3.1.3` / `6.0.5` | Modular REST API server and routing |
 | **Frontend Framework** | React.js (Vite) | `React 19.x` / `Vite 6.x` | Modern reactive dashboard client |
 | **Frontend Styling** | Modern CSS | Custom Navy/Slate Theme | Responsive, executive legal dashboard aesthetic |
 | **AI Model** | Groq API | `llama-3.3-70b-versatile` | Ultra-low latency, high-reasoning legal summarization |
-| **Web Scraping** | Firecrawl API | Firecrawl v1 REST / Fallback | Clean markdown extraction from regulatory HTML |
+| **Web Scraping** | Firecrawl API | Firecrawl v1 REST / Webhooks | Automated crawling and clean markdown extraction |
 | **Database** | Firebase Firestore | `google-cloud-firestore 2.34+` | Real-time NoSQL persistent document database |
-| **Authentication** | Firebase Auth / JWT | Firebase Admin SDK / PyJWT | Token verification and role-based access control |
-| **Historical Memory** | Memento Memory | Bitemporal Memory Engine | Precedent retrieval and institutional continuity |
-| **Public Deployment** | Ngrok / Flask | Local / Cloud Forwarding | Secure tunneling for public stakeholders |
+| **Authentication** | Firebase Auth / JWT | Firebase Admin SDK / PyJWT | Token verification and 4-tier role authorization |
+| **Historical Memory** | Memento AGI MCP | Hosted JSON-RPC 2.0 Engine | Bitemporal precedent retrieval and continuity |
+| **Backend Hosting** | Render | Web Service + Background Worker | Production cloud hosting and decoupled queuing |
+| **Frontend Hosting** | Vercel | Static SPA Hosting | High-speed global edge network deployment |
 
 ---
 
-## 3. System Architecture & Information Flow
+## 4. Environment Variables Reference
 
-```mermaid
-flowchart TD
-    subgraph Regulatory Authorities
-        RBI["RBI Official Portal"]
-        SEBI["SEBI Circulars"]
-        MCA["MCA Gazette"]
-        IRDAI["IRDAI Repository"]
-    end
+Copy `backend/.env.example` to `backend/.env` and configure your credentials:
 
-    subgraph Data Extraction Layer
-        FC["Firecrawl API / Native Scraper"]
-    end
+```bash
+# Server Environment
+PORT=5000
+DEBUG=False
+ENVIRONMENT=production
+SECRET_KEY=your-flask-secret-key-change-in-production
+JWT_SECRET=your-jwt-signing-secret-change-in-production
 
-    subgraph Processing & Change Detection
-        CD["Change Detection Engine<br/>(SHA-256 Normalization)"]
-        DIFF["Diff Generator<br/>(Unified Version Diffs)"]
-    end
+# Firebase Firestore & Authentication
+FIREBASE_SERVICE_ACCOUNT_KEY=./firebase-service-account.json
+FIREBASE_PROJECT_ID=your-firebase-project-id
 
-    subgraph Historical Memory Layer
-        MEM["Memento Bitemporal Memory<br/>(Valid Time vs. Transaction Time)"]
-    end
+# Groq LLM API Configuration
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
 
-    subgraph GenAI Summarization Layer
-        GROQ["Groq LLM Engine<br/>(Llama-3.3-70B-Versatile)"]
-    end
+# Firecrawl Web Scraping & Scheduled Monitoring
+FIRECRAWL_API_KEY=your_firecrawl_api_key_here
+FIRECRAWL_API_URL=https://api.firecrawl.dev/v1
+FIRECRAWL_WEBHOOK_SECRET=your_firecrawl_webhook_secret_here
 
-    subgraph Persistence Layer
-        FS[("Firebase Firestore")]
-        U_COLL["users"]
-        S_COLL["regulatory_sources"]
-        UP_COLL["regulatory_updates"]
-        VER_COLL["document_versions"]
-        SUM_COLL["ai_summaries"]
-        REV_COLL["review_history"]
-        MEM_COLL["historical_context"]
-    end
+# Memento Historical Memory (Hosted MCP & Local Store)
+MEMENTO_API_KEY=your_memento_api_key_here
+MEMENTO_STORAGE_PATH=./data/memento_store
+MEMENTO_MCP_URL=https://api.mementoagi.com/mcp
 
-    subgraph Human Review Workbench
-        REV_UI["React Legal Dashboard<br/>(Approve / Reject / Edit)"]
-    end
-
-    RBI & SEBI & MCA & IRDAI --> FC
-    FC --> CD
-    CD -- "New / Modified" --> MEM
-    MEM -- "Historical Precedents" --> GROQ
-    CD -- "Scraped Content" --> GROQ
-    CD -- "If Modified" --> DIFF
-    GROQ -- "10-Point Legal Brief" --> FS
-    DIFF --> FS
-    FS --> REV_UI
-    REV_UI -- "Approved Interpretation" --> MEM
+# Background Worker Settings
+WORKER_POLL_INTERVAL=10
 ```
 
 ---
 
-## 4. Database Design (Firebase Firestore)
-
-The application models regulatory entities as independent document collections in Firebase Firestore:
-
-```mermaid
-erDiagram
-    users {
-        string uid PK
-        string email
-        string display_name
-        string role
-        string department
-        timestamp created_at
-        timestamp last_login_at
-    }
-
-    regulatory_sources {
-        string source_id PK
-        string source_code
-        string name
-        string jurisdiction
-        string regulator_type
-        string crawl_url
-        int crawl_frequency_minutes
-        boolean is_active
-        timestamp last_crawled_at
-    }
-
-    regulatory_updates {
-        string id PK
-        string document_id
-        string source_id FK
-        string source_code
-        string title
-        string source_url
-        string published_date
-        string current_status
-        int version
-        string content
-        string content_hash
-        timestamp collected_at
-    }
-
-    document_versions {
-        string id PK
-        string update_id FK
-        int version_number
-        string content
-        string content_hash
-        json diff
-        timestamp created_at
-    }
-
-    ai_summaries {
-        string id PK
-        string update_id FK
-        string short_summary
-        string detailed_summary
-        array key_regulatory_changes
-        array important_requirements
-        array affected_organizations
-        array potential_compliance_implications
-        string effective_date
-        array recommended_actions
-        float confidence_score
-        string model_used
-        string disclaimer
-        string human_edited_summary
-        boolean is_approved
-    }
-
-    historical_context {
-        string id PK
-        string memory_id
-        string update_id FK
-        string document_id
-        string regulator
-        string precedent_ref
-        string precedent_date
-        string recalled_context
-        string continuity_status
-        string valid_time
-        timestamp transaction_time
-        array entity_tags
-    }
-
-    review_history {
-        string id PK
-        string update_id FK
-        string reviewer_id FK
-        string reviewer_name
-        string reviewer_email
-        string decision
-        string comments
-        string edited_summary
-        timestamp reviewed_at
-    }
-
-    regulatory_sources ||--o{ regulatory_updates : monitors
-    regulatory_updates ||--o{ document_versions : maintains
-    regulatory_updates ||--|| ai_summaries : generates
-    regulatory_updates ||--o{ historical_context : references
-    regulatory_updates ||--o{ review_history : audits
-    users ||--o{ review_history : performs
-```
-
-### Firestore Security Rules
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Authenticated users can read updates and summaries
-    match /regulatory_updates/{updateId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.role == 'admin';
-    }
-    match /ai_summaries/{summaryId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (request.auth.token.role in ['admin', 'reviewer']);
-    }
-    match /review_history/{reviewId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && (request.auth.token.role in ['admin', 'reviewer']);
-    }
-    match /regulatory_sources/{sourceId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.role == 'admin';
-    }
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.role == 'admin';
-    }
-  }
-}
-```
-
----
-
-## 5. Project Workflow & Milestones
-
-### Milestone 1: Model Selection & Architecture
-- **Activity 1.1:** Configured Groq API keys and evaluated inference latencies.
-- **Activity 1.2:** Selected `llama-3.3-70b-versatile` for high legal reasoning, nuanced compliance extraction, and zero-hallucination compliance.
-- **Activity 1.3:** Configured Firecrawl API client with domestic fallback parser using BeautifulSoup.
-- **Activity 1.4:** Implemented Memento bitemporal memory architecture (`valid_time` vs `transaction_time`).
-- **Activity 1.5:** Initialized Firebase Firestore client via Firebase Admin SDK with persistent local fallback state store.
-- **Activity 1.6:** Finalized 3-tier REST architecture with Flask and React.
-- **Activity 1.7:** Established Python 3.14.2 virtual environment and Vite toolchain.
-
-### Milestone 2: Core Functionalities Development
-- **Activity 2.1:** Automated crawler scheduling for RBI, SEBI, MCA, and IRDAI official circular portals.
-- **Activity 2.2:** Document extraction parsing titles, dates, authority codes, and body markdown.
-- **Activity 2.3:** Implemented SHA-256 hash change detection and unified diff computing.
-- **Activity 2.4:** Formulated 10-point structured legal prompt schema with mandatory disclaimers.
-- **Activity 2.5:** Built Memento memory recall engine injecting precedents into Groq LLM prompts.
-- **Activity 2.6:** Designed 7 collections in Firebase Firestore with automatic seed initialization.
-
-### Milestone 3: Backend Development
-- **Activity 3.1:** Modular Flask application factory pattern in `app.py`.
-- **Activity 3.2:** Created route blueprints: `auth`, `sources`, `updates`, `scrape`, `summaries`, `reviews`, `memory`.
-- **Activity 3.3:** Built `FirecrawlService` with automated metadata extraction.
-- **Activity 3.4:** Built `GroqSummarizerService` with fallback heuristic NLP engine.
-- **Activity 3.5:** Built `FirestoreManager` handling live credentials or local mock store.
-- **Activity 3.6:** Built `MementoMemoryService` supporting precedent search and interpretation storage.
-- **Activity 3.7:** Implemented JWT and Firebase ID Token verification with `@token_required` and `@roles_required`.
-- **Activity 3.8:** Authored automated unit test suite (`test_all.py` / `run_tests.py`) achieving 100% pass rate.
-
-### Milestone 4: Frontend Development
-- **Activity 4.1:** React 19 + Vite scaffolding with clean Navy Blue executive aesthetic.
-- **Activity 4.2:** Login page with one-click demo role switches (*Admin*, *Reviewer*, *Viewer*).
-- **Activity 4.3:** Live regulatory updates feed with search, regulator filters, and status badges.
-- **Activity 4.4:** Dedicated AI Summary view with 10-point breakdown and copy-to-clipboard briefings.
-- **Activity 4.5:** Memento Historical Context Explorer with bitemporal timeline and legal tags.
-- **Activity 4.6:** Human Review and Approval workbench with summary editing and comment logs.
-- **Activity 4.7:** Source Management page for adding and crawling regulatory authorities.
-- **Activity 4.8:** Responsive CSS layout with unified text diff viewer (+ green / - red).
-
-### Milestone 5: Testing and Deployment
-- **Activity 5.1:** Backend unit testing of all endpoints and services.
-- **Activity 5.2:** Frontend production bundle verification (`npm run build` completed in 2.29s).
-- **Activity 5.3:** API integration testing with real mock tokens and payloads.
-- **Activity 5.4:** Firestore state verification across collections.
-- **Activity 5.5:** Local deployment on `http://localhost:5000` (Flask) and `http://localhost:3000` (Vite).
-- **Activity 5.6:** Ngrok public tunnel setup for demonstration.
-
-### Milestone 6: Conclusion & Future Enhancements
-- Automated multi-lingual translation for state-level vernacular legal gazettes.
-- Real-time Slack, Microsoft Teams, and email compliance alert webhooks.
-- Multi-jurisdiction expansion to global regulators (SEC, ESMA, FCA, MAS).
-
----
-
-## 6. Installation & Execution Guide
+## 5. Quick Start (Local Execution)
 
 ### Prerequisites
-- **Python 3.14.2** installed and verified: `python --version`
+- **Python 3.14.2** installed: `python --version`
 - **Node.js 20+** and **npm** installed: `node --version`, `npm --version`
-- (Optional) Firebase service account JSON, Groq API key, Firecrawl API key.
 
-### Step 1: Clone and Set Up Backend
-Open **Windows PowerShell** in the project directory:
-
+### Step 1: Start Flask Backend Server
+Open **Windows PowerShell** in `backend/`:
 ```powershell
-# Navigate to backend directory
-cd "C:\5th sem\gen ai\LegalUpdate AI Regulatory Change Summarizer\backend"
-
-# Activate existing virtual environment (or create if needed)
+cd backend
+python -m venv venv
 .\venv\Scripts\Activate.ps1
-
-# Install required dependencies
 pip install -r requirements.txt
-
-# Configure environment variables (pre-populated with working defaults)
-copy .env.example .env
-```
-
-### Step 2: Run Automated Test Suite
-Verify backend health and services:
-```powershell
-python run_tests.py
-```
-*Expected Output:* `Ran 11 tests in 0.88s ... ALL TESTS PASSED SUCCESSFULLY (100% PASS RATE)`
-
-### Step 3: Start Flask Server
-```powershell
 python app.py
 ```
-*Server starts on `http://localhost:5000` with active API endpoints and local Firestore storage.*
+*Backend runs on `http://127.0.0.1:5000`.*
 
-### Step 4: Set Up and Run React Frontend
-Open a **second Windows PowerShell** terminal:
-
+### Step 2: Start Background Worker (In a separate terminal)
 ```powershell
-# Navigate to frontend directory
-cd "C:\5th sem\gen ai\LegalUpdate AI Regulatory Change Summarizer\frontend"
+cd backend
+.\venv\Scripts\Activate.ps1
+python worker.py
+```
+*Worker actively polls `ingestion_jobs` and executes background tasks.*
 
-# Install node packages (if not already installed)
+### Step 3: Start React Frontend (In a separate terminal)
+```powershell
+cd frontend
 npm install
-
-# Start the Vite development server
 npm run dev
 ```
-*Frontend opens at `http://localhost:3000`.*
+*Frontend runs on `http://localhost:3000`.*
 
 ---
 
-## 7. Demonstration Accounts
+## 6. One-Click Demonstration Accounts
 
 The platform includes pre-seeded demonstration accounts with role-based permissions:
 
-| Role | Email | Password | Permissions |
+| Role | Email | Password | Access Level |
 |---|---|---|---|
-| **Admin** | `admin@legalupdate.ai` | `admin123` | Full access: Source management, user roles, ingestion, review |
-| **Legal Reviewer** | `senior.counsel@legalupdate.ai` | `review123` | Ingest URLs, review queue, approve/reject summaries, edit text |
-| **Compliance Officer** | `compliance.officer@legalupdate.ai` | `review123` | Review and approve regulatory updates, add audit notes |
-| **Intelligence Analyst** | `analyst@legalupdate.ai` | `viewer123` | Read-only access to briefings, search, and historical context |
+| **Admin** | `admin@legalupdate.ai` | `admin123` | Full access: Source management, monitors, users, review |
+| **Senior Reviewer** | `senior.counsel@legalupdate.ai` | `review123` | Counsel sign-off, text editing, precedent indexing |
+| **Compliance Reviewer** | `compliance.officer@legalupdate.ai` | `review123` | Compliance review verification and comments |
+| **Analyst (Viewer)** | `analyst@legalupdate.ai` | `viewer123` | Read-only access to briefings, diffs, and search |
 
 ---
 
-## 8. Public Demonstration with Ngrok
+## 7. Cloud Deployment Guides
 
-To expose the application to remote reviewers or public evaluators:
+- **Render (Web Service + Background Worker):** Configured via [render.yaml](./render.yaml). See [DEPLOYMENT.md](./DEPLOYMENT.md).
+- **Vercel (React Frontend):** Configured via [vercel.json](./frontend/vercel.json). See [DEPLOYMENT.md](./DEPLOYMENT.md).
+- **Firebase Firestore Setup:** See [FIREBASE_SETUP.md](./FIREBASE_SETUP.md).
+- **15-Minute Monitoring Setup:** See [MONITORING_SETUP.md](./MONITORING_SETUP.md).
+- **REST API Reference:** See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
+- **Automated Test Suite (15 Tests):** See [TESTING.md](./TESTING.md).
 
-```powershell
-# In a separate PowerShell window:
-ngrok http 5000
-```
-Use the assigned `https://<subdomain>.ngrok-free.app` URL to verify endpoints remotely.
+---
 
+## 8. License & Compliance Disclaimer
+
+*LegalUpdate AI is designed exclusively for legal and compliance decision support. AI-generated analyses do not constitute authoritative legal advice. All regulatory interpretations require verification by qualified legal counsel prior to formal reliance.*

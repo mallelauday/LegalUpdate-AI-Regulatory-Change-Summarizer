@@ -239,7 +239,7 @@ class FirestoreManager:
                     "uid": "usr-reviewer-01",
                     "email": "senior.counsel@legalupdate.ai",
                     "display_name": "Vikram Mehta",
-                    "role": "reviewer",
+                    "role": "senior_reviewer",
                     "department": "Banking & Capital Markets Regulatory",
                     "password_hash": hash_pw("review123"),
                     "created_at": get_utc_now(),
@@ -249,7 +249,7 @@ class FirestoreManager:
                     "uid": "usr-reviewer-02",
                     "email": "compliance.officer@legalupdate.ai",
                     "display_name": "Ananya Sharma",
-                    "role": "reviewer",
+                    "role": "compliance_reviewer",
                     "department": "Corporate Governance & Ethics",
                     "password_hash": hash_pw("review123"),
                     "created_at": get_utc_now(),
@@ -667,3 +667,170 @@ Joint Secretary to the Government of India""",
                     db.collection("review_history").document(rev["id"]).set(rev)
 
             logger.info("Seeded %d realistic regulatory updates with AI summaries, versions, memories & reviews in Firestore.", len(curated_updates))
+
+        # 4. Monitor Configs (15-Minute Schedules)
+        monitors_ref = db.collection("monitor_configs")
+        if not list(monitors_ref.limit(1).stream()):
+            monitors = [
+                {
+                    "id": "mon-rbi",
+                    "monitor_id": "mon-rbi",
+                    "source_code": "RBI",
+                    "source_id": "src-rbi",
+                    "name": "Reserve Bank of India (RBI) Monitor",
+                    "crawl_url": "https://www.rbi.org.in/scripts/BS_CircularIndexDisplay.aspx",
+                    "schedule": "every 15 minutes",
+                    "cron": "*/15 * * * *",
+                    "timezone": "Asia/Kolkata",
+                    "is_active": True,
+                    "last_checked_at": get_utc_now(),
+                    "total_runs": 142,
+                    "created_at": get_utc_now()
+                },
+                {
+                    "id": "mon-sebi",
+                    "monitor_id": "mon-sebi",
+                    "source_code": "SEBI",
+                    "source_id": "src-sebi",
+                    "name": "Securities and Exchange Board of India (SEBI) Monitor",
+                    "crawl_url": "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&smid=0&ssid=7",
+                    "schedule": "every 15 minutes",
+                    "cron": "*/15 * * * *",
+                    "timezone": "Asia/Kolkata",
+                    "is_active": True,
+                    "last_checked_at": get_utc_now(),
+                    "total_runs": 139,
+                    "created_at": get_utc_now()
+                },
+                {
+                    "id": "mon-mca",
+                    "monitor_id": "mon-mca",
+                    "source_code": "MCA",
+                    "source_id": "src-mca",
+                    "name": "Ministry of Corporate Affairs (MCA) Monitor",
+                    "crawl_url": "https://www.mca.gov.in/content/mca/global/en/notifications-circulars/circulars.html",
+                    "schedule": "every 15 minutes",
+                    "cron": "*/15 * * * *",
+                    "timezone": "Asia/Kolkata",
+                    "is_active": True,
+                    "last_checked_at": get_utc_now(),
+                    "total_runs": 118,
+                    "created_at": get_utc_now()
+                },
+                {
+                    "id": "mon-irdai",
+                    "monitor_id": "mon-irdai",
+                    "source_code": "IRDAI",
+                    "source_id": "src-irdai",
+                    "name": "Insurance Regulatory and Development Authority (IRDAI) Monitor",
+                    "crawl_url": "https://irdai.gov.in/circulars",
+                    "schedule": "every 15 minutes",
+                    "cron": "*/15 * * * *",
+                    "timezone": "Asia/Kolkata",
+                    "is_active": True,
+                    "last_checked_at": get_utc_now(),
+                    "total_runs": 115,
+                    "created_at": get_utc_now()
+                }
+            ]
+            for m in monitors:
+                monitors_ref.document(m["id"]).set(m)
+            logger.info("Seeded %d monitor configs in Firestore.", len(monitors))
+
+        # 5. Ingestion Jobs
+        jobs_ref = db.collection("ingestion_jobs")
+        if not list(jobs_ref.limit(1).stream()):
+            sample_jobs = [
+                {
+                    "id": "job-init-01",
+                    "job_id": "job-init-01",
+                    "source_code": "RBI",
+                    "url": "https://www.rbi.org.in/scripts/BS_CircularIndexDisplay.aspx",
+                    "type": "scheduled_monitor_check",
+                    "status": "completed",
+                    "claimed_by": "worker-system-01",
+                    "claimed_at": get_utc_now(),
+                    "completed_at": get_utc_now(),
+                    "created_at": get_utc_now(),
+                    "retry_count": 0,
+                    "error": None
+                },
+                {
+                    "id": "job-init-02",
+                    "job_id": "job-init-02",
+                    "source_code": "SEBI",
+                    "url": "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&smid=0&ssid=7",
+                    "type": "firecrawl_webhook_event",
+                    "status": "completed",
+                    "claimed_by": "worker-system-01",
+                    "claimed_at": get_utc_now(),
+                    "completed_at": get_utc_now(),
+                    "created_at": get_utc_now(),
+                    "retry_count": 0,
+                    "error": None
+                }
+            ]
+            for j in sample_jobs:
+                jobs_ref.document(j["id"]).set(j)
+
+        # 6. Webhook Events
+        wh_ref = db.collection("webhook_events")
+        if not list(wh_ref.limit(1).stream()):
+            sample_wh = [
+                {
+                    "id": "wh-event-01",
+                    "event_id": "wh-event-01",
+                    "job_id": "job-init-02",
+                    "source": "firecrawl",
+                    "source_code": "SEBI",
+                    "status": "processed",
+                    "received_at": get_utc_now()
+                }
+            ]
+            for w in sample_wh:
+                wh_ref.document(w["id"]).set(w)
+
+        # 7. Notifications
+        notif_ref = db.collection("notifications")
+        if not list(notif_ref.limit(1).stream()):
+            sample_notifs = [
+                {
+                    "id": "notif-01",
+                    "title": "New Circular Published: Digital Lending Guidelines (RBI)",
+                    "regulator": "RBI",
+                    "type": "new_circular",
+                    "read": False,
+                    "created_at": get_utc_now()
+                },
+                {
+                    "id": "notif-02",
+                    "title": "Review Required: Business Responsibility & Sustainability Reporting (SEBI)",
+                    "regulator": "SEBI",
+                    "type": "review_alert",
+                    "read": False,
+                    "created_at": get_utc_now()
+                }
+            ]
+            for n in sample_notifs:
+                notif_ref.document(n["id"]).set(n)
+
+        # 8. System Logs
+        sys_ref = db.collection("system_logs")
+        if not list(sys_ref.limit(1).stream()):
+            sample_logs = [
+                {
+                    "id": "log-01",
+                    "event": "system_startup",
+                    "service": "LegalUpdate AI",
+                    "version": "1.0.0",
+                    "timestamp": get_utc_now()
+                },
+                {
+                    "id": "log-02",
+                    "event": "monitor_initialized",
+                    "message": "Initialized 15-minute monitors for RBI, SEBI, MCA, IRDAI",
+                    "timestamp": get_utc_now()
+                }
+            ]
+            for l in sample_logs:
+                sys_ref.document(l["id"]).set(l)

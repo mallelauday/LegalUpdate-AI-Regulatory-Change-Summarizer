@@ -23,11 +23,16 @@ class Config:
     # Firecrawl
     FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
     FIRECRAWL_API_URL = os.getenv("FIRECRAWL_API_URL", "https://api.firecrawl.dev/v1")
+    FIRECRAWL_WEBHOOK_SECRET = os.getenv("FIRECRAWL_WEBHOOK_SECRET", "legalupdate-firecrawl-webhook-secret-2026")
     
     # Memento Memory
     MEMENTO_API_KEY = os.getenv("MEMENTO_API_KEY", "")
     MEMENTO_STORAGE_PATH = os.getenv("MEMENTO_STORAGE_PATH", str(base_dir / "data" / "memento_store"))
+    MEMENTO_MCP_URL = os.getenv("MEMENTO_MCP_URL", "https://api.mementoagi.com/mcp")
     
+    # Worker Configuration
+    WORKER_POLL_INTERVAL = int(os.getenv("WORKER_POLL_INTERVAL", 10))
+
     @classmethod
     def is_groq_configured(cls):
         return bool(cls.GROQ_API_KEY and not cls.GROQ_API_KEY.startswith("your_"))
@@ -35,6 +40,10 @@ class Config:
     @classmethod
     def is_firecrawl_configured(cls):
         return bool(cls.FIRECRAWL_API_KEY and not cls.FIRECRAWL_API_KEY.startswith("your_"))
+
+    @classmethod
+    def is_memento_configured(cls):
+        return bool(cls.MEMENTO_API_KEY and not cls.MEMENTO_API_KEY.startswith("your_"))
 
     @classmethod
     def is_firebase_configured(cls):

@@ -1,13 +1,129 @@
-﻿node_modules/
-venv/
-.venv/
-__pycache__/
-*.pyc
+﻿# ==============================================================================
+# LegalUpdate AI - Production .gitignore
+# Regulatory Change Summarizer & Monitoring Suite
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Secrets, Private Keys & Environment Configurations
+# ------------------------------------------------------------------------------
 .env
 .env.*
+.env.local
+.env.development
+.env.production
+.env.staging
 !.env.example
-dist/
-build/
-*.zip
+!.env.sample
 
-backend/gen-ai-f7848-firebase-adminsdk-fbsvc-f734bc9909.json
+# Firebase Admin SDK & Cloud Service Accounts
+*firebase-adminsdk*.json
+gen-ai-*.json
+serviceAccountKey*.json
+service-account*.json
+credentials.json
+secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local Memento & MCP Credential Configurations
+.cursor/mcp.json
+mcp.json
+mcp_config.json
+
+# ------------------------------------------------------------------------------
+# Python Runtime & Packaging
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Type Checking Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.nox/
+.tox/
+
+# Python Distribution & Egg Info
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ------------------------------------------------------------------------------
+# Frontend (React / Vite / Node.js)
+# ------------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+frontend/dist-ssr/
+.vite/
+frontend/.vite/
+coverage/
+frontend/coverage/
+
+# Node Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ------------------------------------------------------------------------------
+# Local Runtime Data, Storage & Generated Artifacts
+# ------------------------------------------------------------------------------
+backend/data/
+data/
+data/memento_store/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.zip
+*.tar.gz
+
+# ------------------------------------------------------------------------------
+# Operating System & IDE Files
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+!.vscode/extensions.json
+.cursor/
+*.sublime-project
+*.sublime-workspace

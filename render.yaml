@@ -1,0 +1,77 @@
+services:
+  # 1. LegalUpdate AI Web Service (API & Firecrawl Webhooks)
+  - type: web
+    name: legalupdate-ai-api
+    runtime: python
+    region: oregon
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.2
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_URL
+        value: https://api.firecrawl.dev/v1
+      - key: FIRECRAWL_WEBHOOK_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: MEMENTO_API_KEY
+        sync: false
+      - key: MEMENTO_MCP_URL
+        value: https://api.mementoagi.com/mcp
+      - key: FIREBASE_PROJECT_ID
+        value: gen-ai-f7848
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        value: ./gen-ai-f7848-firebase-adminsdk-fbsvc-f734bc9909.json
+
+  # 2. LegalUpdate AI Render Background Worker (Queue, Ingestion, Diffing, Summarization)
+  - type: worker
+    name: legalupdate-ai-worker
+    runtime: python
+    region: oregon
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python worker.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.2
+      - key: ENVIRONMENT
+        value: production
+      - key: WORKER_POLL_INTERVAL
+        value: "10"
+      - key: FIRECRAWL_API_KEY
+        fromService:
+          type: web
+          name: legalupdate-ai-api
+          envVarKey: FIRECRAWL_API_KEY
+      - key: GROQ_API_KEY
+        fromService:
+          type: web
+          name: legalupdate-ai-api
+          envVarKey: GROQ_API_KEY
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: MEMENTO_API_KEY
+        fromService:
+          type: web
+          name: legalupdate-ai-api
+          envVarKey: MEMENTO_API_KEY
+      - key: FIREBASE_PROJECT_ID
+        value: gen-ai-f7848
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        value: ./gen-ai-f7848-firebase-adminsdk-fbsvc-f734bc9909.json

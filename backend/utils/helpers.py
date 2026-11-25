@@ -120,9 +120,19 @@ def roles_required(*allowed_roles):
         @wraps(f)
         def decorated(*args, **kwargs):
             user = getattr(request, "current_user", None)
-            if not user or user.get("role") not in allowed_roles:
+            if not user:
+                return api_response(error="Unauthorized. Please log in.", status_code=401)
+            
+            user_role = user.get("role", "")
+            expanded_allowed = set(allowed_roles)
+            if "reviewer" in expanded_allowed:
+                expanded_allowed.update(["senior_reviewer", "compliance_reviewer"])
+            if user_role == "admin":
+                expanded_allowed.add("admin")
+
+            if user_role not in expanded_allowed:
                 return api_response(
-                    error=f"Access denied. Required roles: {', '.join(allowed_roles)}",
+                    error=f"Access denied. Required roles: {', '.join(allowed_roles)} (Current: {user_role})",
                     status_code=403
                 )
             return f(*args, **kwargs)

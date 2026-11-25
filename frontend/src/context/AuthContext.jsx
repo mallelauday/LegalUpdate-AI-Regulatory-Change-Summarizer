@@ -50,10 +50,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAdmin = user?.role === 'admin';
-  const isReviewer = user?.role === 'reviewer' || user?.role === 'admin';
+  const isSeniorReviewer = user?.role === 'admin' || user?.role === 'senior_reviewer';
+  const isReviewer = ['admin', 'senior_reviewer', 'compliance_reviewer', 'reviewer'].includes(user?.role);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading, isAdmin, isReviewer }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, isAdmin, isReviewer, isSeniorReviewer }}>
       {children}
     </AuthContext.Provider>
   );

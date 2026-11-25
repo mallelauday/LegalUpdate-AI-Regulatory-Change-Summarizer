@@ -24,9 +24,9 @@ export default function RegulatoryUpdatesPage({ onSelectUpdate, onOpenScrapeModa
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState(null);
 
-  const fetchUpdates = async () => {
+  const fetchUpdates = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (regulator) params.append('regulator', regulator);
@@ -40,14 +40,18 @@ export default function RegulatoryUpdatesPage({ onSelectUpdate, onOpenScrapeModa
         setMeta(res.meta);
       }
     } catch (err) {
-      setError(err.message);
+      if (!silent) setError(err.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchUpdates();
+    const interval = setInterval(() => {
+      fetchUpdates(true);
+    }, 20000);
+    return () => clearInterval(interval);
   }, [regulator, status, page]);
 
   const handleSearchSubmit = (e) => {
