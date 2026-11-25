@@ -50,6 +50,11 @@ def create_app():
     app.register_blueprint(webhook_bp)
     app.register_blueprint(monitoring_bp)
 
+    # Root route for Render health check
+    @app.route("/", methods=["GET", "HEAD"])
+    def root():
+        return jsonify({"status": "ok", "service": "LegalUpdate AI"}), 200
+
     # Root and API Health Check
     def get_health_data():
         return {
